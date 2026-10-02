@@ -40,6 +40,10 @@ label{font-size:13px;font-weight:600}
 .empty{text-align:center;padding:40px 10px;color:#6b6490}
 @media (prefers-reduced-motion:reduce){.sheet{animation:none}}
 
+.btn.wa,.pill.wa{background:#25d366}
+.chart{display:flex;gap:10px;align-items:flex-end;margin-bottom:6px}.col{flex:1;text-align:center;font-size:10px;color:#6b6490}
+.bk{height:110px;display:flex;flex-direction:column-reverse;justify-content:flex-start;background:#f3f0ff;border-radius:8px;overflow:hidden;margin-bottom:4px}.bk i{display:block;width:100%}
+
 </style></head>
 <body>
 <header><h1 id="title">Dashboard</h1><small>Velan Chit Fund</small></header>
@@ -53,5 +57,152 @@ label{font-size:13px;font-weight:600}
 <button data-t="set">⚙️<span>Settings</span></button>
 </nav>
 <div id="modal"></div>
-<script src="js/app.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+let db=JSON.parse(localStorage.getItem('velanChit')||'null')||{members:[],chits:[],pay:{}};
+const save=()=>localStorage.setItem('velanChit',JSON.stringify(db));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const rs=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nm=id=>(db.members.find(x=>x.id==id)||{}).name||'-';
+const getC=id=>db.chits.find(c=>c.id==id);
+const key=(c,m,id)=>c.id+'_'+m+'_'+id;
+const base=c=>c.value/c.months;
+const winnerOf=(c,m)=>c.rounds[m]&&c.rounds[m].winner;
+const div=(c,m)=>(c.rounds[m]&&c.rounds[m].dividend)||0;
+const wonBy=(c,m,id)=>{for(let k=0;k<=m;k++)if(winnerOf(c,k)==id)return true;return false};
+const due=(c,m,id)=>base(c)-(wonBy(c,m,id)?0:div(c,m));
+const curM=c=>{const s=new Date(c.start),n=new Date();return Math.min(c.months-1,Math.max(0,(n.getFullYear()-s.getFullYear())*12+n.getMonth()-s.getMonth()))};
+const nextM=c=>{for(let m=0;m<c.months;m++)if(!winnerOf(c,m))return m;return -1};
+let tab='home',view=null,auc=null;
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;view=null;render()});
+function render(){
+ $('#title').textContent={home:'Dashboard',mem:'Members',chit:'Chits',auc:'Auction',set:'Settings'}[tab];
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==tab));
+ $('#fab').style.display=(tab=='mem'||(tab=='chit'&&!view))?'block':'none';
+ $('#main').innerHTML=({home:vHome,mem:vMem,chit:vChit,auc:vAuc,set:vSet}[tab])();
+}
+const empty=t=>`<div class="empty">${t}</div>`;
+function modal(h){$('#modal').innerHTML=`<div class="sheet">${h}<button class="btn" onclick="closeM()">Done</button></div>`;$('#modal').classList.add('open')}
+function closeM(){$('#modal').classList.remove('open');render()}
+function addNew(){tab=='mem'?memForm():chitForm()}
+
+function calc(){
+ const r={col:0,pen:0,mon:{},mem:{},ch:{}};
+ db.chits.forEach(c=>{const cur=curM(c),s=new Date(c.start);let cc=0,pp=0;
+  for(let m=0;m<c.months;m++){const k=new Date(s.getFullYear(),s.getMonth()+m,1),mk=k.getFullYear()+'-'+String(k.getMonth()+1).padStart(2,'0');
+   r.mon[mk]=r.mon[mk]||{col:0,pen:0};
+   c.members.forEach(id=>{const d=due(c,m,id);
+    if(db.pay[key(c,m,id)]){r.col+=d;cc+=d;r.mon[mk].col+=d}
+    else if(m<=cur){r.pen+=d;pp+=d;r.mon[mk].pen+=d;(r.mem[id]=r.mem[id]||[]).push({c,m,d})}})}
+  r.ch[c.id]={cc,pp}});
+ return r}
+function vHome(){
+ const k=calc();
+ let h=`<div class="grid"><div class="stat s1"><b>${db.members.length}</b><span>Members</span></div><div class="stat s2"><b>${db.chits.length}</b><span>Chits</span></div><div class="stat s3"><b>${rs(k.col)}</b><span>Collected</span></div><div class="stat s4"><b>${rs(k.pen)}</b><span>Pending dues</span></div></div>`;
+ if(!db.chits.length)return h+empty('No chits yet. Add members, then create a chit.');
+ const n=new Date(),nk=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'),ks=Object.keys(k.mon).sort();
+ let use=ks.filter(x=>x<=nk).slice(-6);if(!use.length)use=ks.slice(0,6);
+ const mx=Math.max(1,...use.map(x=>k.mon[x].col+k.mon[x].pen));
+ h+=`<h3>Month-wise collection</h3><div class="card" style="display:block"><div class="chart">${use.map(x=>{const v=k.mon[x];return `<div class="col"><div class="bk"><i style="height:${v.col/mx*100}%;background:#14b8a6"></i><i style="height:${v.pen/mx*100}%;background:#f97316"></i></div>${x.slice(5)}/${x.slice(2,4)}</div>`}).join('')}</div><small class="muted">🟩 Collected &nbsp; 🟧 Pending</small></div>`;
+ h+=`<h3>Chit-wise status</h3>`+db.chits.map(c=>{const v=k.ch[c.id],t=v.cc+v.pp,p=t?Math.round(100*v.cc/t):0;
+  return `<div class="card" onclick="tab='chit';view='${c.id}';render()"><div><strong>${esc(c.name)}</strong><small>Collected ${rs(v.cc)} • Pending ${rs(v.pp)}</small><div class="bar"><i style="width:${p}%"></i></div></div><span class="pill v">${p}%</span></div>`}).join('');
+ const od=Object.keys(k.mem);
+ h+=`<h3>Overdue members</h3>`+(od.length?od.map(id=>{const t=k.mem[id].reduce((a,x)=>a+x.d,0);return `<div class="card"><div class="av">${esc(nm(id)[0]).toUpperCase()}</div><div><strong>${esc(nm(id))}</strong><small>Pending ${rs(t)}</small></div><button class="pill wa" style="border:0" onclick="wa('${id}')">WhatsApp</button></div>`}).join(''):empty('No overdue dues 🎉'));
+ return h;
+}
+function wa(id){
+ const mb=db.members.find(x=>x.id==id),L=calc().mem[id]||[];
+ if(!L.length)return alert('No pending dues');
+ let p=(mb.phone||'').replace(/\D/g,'');if(!p)return alert('Add phone number first (Edit member)');if(p.length==10)p='91'+p;
+ const t=`Vanakkam ${mb.name}, Velan Chit Fund reminder:\n`+L.map(x=>`${x.c.name} - Month ${x.m+1}: ${rs(x.d)}`).join('\n')+`\nTotal pending: ${rs(L.reduce((a,x)=>a+x.d,0))}. Please pay soon. Nandri.`;
+ window.open('https://wa.me/'+p+'?text='+encodeURIComponent(t),'_blank');
+}
+function vMem(){
+ if(!db.members.length)return empty('No members yet. Tap + to add one.');
+ return db.members.map(m=>`<div class="card" onclick="histM('${m.id}')"><div class="av">${esc(m.name[0]).toUpperCase()}</div><div><strong>${esc(m.name)}</strong><small>${esc(m.phone||'No phone')}</small></div><button class="pill v" style="border:0" onclick="event.stopPropagation();memForm('${m.id}')">Edit</button><button class="pill" style="border:0" onclick="event.stopPropagation();delMem('${m.id}')">Delete</button></div>`).join('');
+}
+function memForm(id){const m=id?db.members.find(x=>x.id==id):{name:'',phone:''};modal(`<h3>${id?'Edit':'New'} member</h3><label>Name</label><input id="mn" value="${esc(m.name)}"><label>Phone (WhatsApp)</label><input id="mp" type="tel" value="${esc(m.phone||'')}"><button class="btn g" onclick="saveMem('${id||''}')">Save member</button>`)}
+function saveMem(id){const n=$('#mn').value.trim();if(!n)return alert('Enter a name');const p=$('#mp').value.trim();
+ if(id){const m=db.members.find(x=>x.id==id);m.name=n;m.phone=p}else db.members.push({id:uid(),name:n,phone:p});save();closeM()}
+function delMem(id){if(db.chits.some(c=>c.members.includes(id)))return alert('This member is in a chit. Remove the chit first.');if(confirm('Delete member?')){db.members=db.members.filter(m=>m.id!=id);save();render()}}
+function histM(id){
+ const mb=db.members.find(x=>x.id==id),L=calc().mem[id]||[];let paid=0,dv=0;
+ const rows=db.chits.filter(c=>c.members.includes(id)).map(c=>{let p=0,dd=0,w=[];
+  for(let m=0;m<c.months;m++){if(db.pay[key(c,m,id)])p+=due(c,m,id);if(winnerOf(c,m)==id)w.push(m+1);if(!wonBy(c,m,id))dd+=div(c,m)}
+  paid+=p;dv+=dd;const pn=L.filter(x=>x.c.id==c.id).reduce((a,x)=>a+x.d,0);
+  return `<div class="card"><div><strong>${esc(c.name)}</strong><small>Paid ${rs(p)} • Pending ${rs(pn)}${dd?' • Dividend '+rs(dd):''}${w.length?' • Won month '+w.join(', '):''}</small></div></div>`}).join('')||empty('Not in any chit yet');
+ const pen=L.reduce((a,x)=>a+x.d,0);
+ modal(`<h3>${esc(mb.name)}</h3><div class="grid"><div class="stat s3"><b>${rs(paid)}</b><span>Paid</span></div><div class="stat s4"><b>${rs(pen)}</b><span>Pending</span></div><div class="stat s1"><b>${rs(dv)}</b><span>Dividend received</span></div></div>${rows}${pen?`<button class="btn wa" onclick="wa('${id}')">WhatsApp reminder</button>`:''}`);
+}
+
+function vChit(){
+ if(view)return vDetail(getC(view));
+ if(!db.chits.length)return empty('No chits yet. Tap + to create one.');
+ return db.chits.map(c=>`<div class="card" onclick="view='${c.id}';render()"><div class="mo" style="background:${c.type=='fixed'?'#6366f1':'#ec4899'}">${c.type=='fixed'?'F':'A'}</div><div><strong>${esc(c.name)}</strong><small>${rs(c.value)} • ${c.months} months • ${rs(base(c))}/month</small></div><button class="pill v" style="border:0" onclick="event.stopPropagation();chitEdit('${c.id}')">Edit</button><button class="pill" style="border:0" onclick="event.stopPropagation();delChit('${c.id}')">Delete</button></div>`).join('');
+}
+function delChit(id){if(confirm('Delete this chit and its payments?')){db.chits=db.chits.filter(c=>c.id!=id);save();render()}}
+function chitForm(){
+ if(db.members.length<2)return alert('Add at least 2 members first');
+ modal(`<h3>New chit</h3><label>Name</label><input id="cn"><label>Chit value (₹)</label><input id="cv" type="number"><label>Months (= number of members)</label><input id="cm" type="number"><label>Type</label><select id="ct"><option value="fixed">Fixed chit</option><option value="auction">Auction chit (dividend)</option></select><label>Commission %</label><input id="cc" type="number" value="5"><label>Start date</label><input id="cd" type="date" value="${new Date().toISOString().slice(0,10)}"><label>Members</label>${db.members.map(m=>`<label class="chk"><input type="checkbox" class="cmem" value="${m.id}"><span>${esc(m.name)}</span></label>`).join('')}<button class="btn g" onclick="saveChit()">Create chit</button>`);
+}
+function saveChit(){
+ const ids=[...document.querySelectorAll('.cmem:checked')].map(x=>x.value),v=+$('#cv').value,mo=+$('#cm').value,n=$('#cn').value.trim();
+ if(!n||v<=0||mo<2)return alert('Fill name, value and months');
+ if(ids.length!=mo)return alert('Select exactly '+mo+' members (one per month)');
+ db.chits.push({id:uid(),name:n,value:v,months:mo,type:$('#ct').value,comm:+$('#cc').value||0,start:$('#cd').value,members:ids,rounds:{}});save();closeM()
+}
+function vDetail(c){
+ let h=`<button class="back" onclick="view=null;render()">‹ Back</button><div class="hero ${c.type}"><h2>${esc(c.name)}</h2><p>${rs(c.value)} • ${c.months} months • ${c.type=='fixed'?'Fixed':'Auction'}</p></div><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn" style="margin:0" onclick="chitEdit('${c.id}')">✏️ Edit</button><button class="btn g" style="margin:0" onclick="stmt('${c.id}')">🖨 Statement</button></div>`;
+ for(let m=0;m<c.months;m++){const w=winnerOf(c,m),p=c.members.filter(id=>db.pay[key(c,m,id)]).length;
+  h+=`<div class="row" onclick="openMonth('${c.id}',${m})"><div class="mo">${m+1}</div><div><strong>${w?esc(nm(w)):'Winner pending'}</strong><small>${rs(base(c))}${c.type=='auction'&&w?' • dividend '+rs(div(c,m)):''}</small></div><span class="pill ${p==c.members.length?'g':''}">${p}/${c.members.length} paid</span></div>`}
+ return h;
+}
+function openMonth(cid,m){
+ const c=getC(cid);let h=`<h3>Month ${m+1}</h3>`;
+ if(c.type=='fixed')h+=`<label>Winner</label><select onchange="setW('${cid}',${m},this.value)"><option value="">Select winner</option>${c.members.map(id=>`<option value="${id}" ${winnerOf(c,m)==id?'selected':''}>${esc(nm(id))}</option>`).join('')}</select>`;
+ else h+=`<p class="muted">Winner by auction: ${winnerOf(c,m)?esc(nm(winnerOf(c,m))):'not held yet'}</p>`+(winnerOf(c,m)?`<button class="btn r" style="margin:0 0 8px" onclick="if(confirm('Reset this auction result?')){delete getC('${cid}').rounds[${m}];save();auc=null;closeM()}">Reset this auction</button>`:'');
+ h+=`<p class="muted">Tick when paid</p>`+c.members.map(id=>`<label class="chk"><input type="checkbox" ${db.pay[key(c,m,id)]?'checked':''} onchange="togglePay('${cid}',${m},'${id}',this.checked)"><span>${esc(nm(id))}</span><b>${rs(due(c,m,id))}</b></label>`).join('');
+ modal(h);
+}
+function setW(cid,m,v){const c=getC(cid);if(v)c.rounds[m]={winner:v,dividend:0};else delete c.rounds[m];save()}
+function togglePay(cid,m,id,on){const k=key(getC(cid),m,id);on?db.pay[k]=1:delete db.pay[k];save()}
+
+function vAuc(){
+ const cs=db.chits.filter(c=>c.type=='auction');
+ if(!cs.length)return empty('Create an auction chit first.');
+ if(!auc||!getC(auc.cid)){const c=cs[0];auc={cid:c.id,m:nextM(c),st:'idle',bids:[]}}
+ const c=getC(auc.cid);
+ let h=`<label>Chit</label><select onchange="pickAuc(this.value)">${cs.map(x=>`<option value="${x.id}" ${x.id==c.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
+ if(auc.m<0)return h+empty('All months of this chit are done 🎉');
+ h+=`<div class="hero auction"><h2>Month ${auc.m+1} auction</h2><p>Chit value ${rs(c.value)} • commission ${c.comm}%</p></div>`;
+ if(auc.st=='idle')return h+`<button class="btn g" onclick="auc.st='live';render()">▶ Start auction</button>`;
+ if(auc.st=='live')return h+`<span class="pill">LIVE</span><label>Member</label><select id="bm">${c.members.filter(id=>!wonBy(c,auc.m,id)).map(id=>`<option value="${id}">${esc(nm(id))}</option>`).join('')}</select><label>Bid: amount member will take (₹)</label><input id="ba" type="number"><button class="btn" onclick="addBid()">Add bid</button>${auc.bids.map(b=>`<div class="row"><div><strong>${esc(nm(b.m))}</strong></div><b>${rs(b.a)}</b></div>`).join('')}<button class="btn r" onclick="stopAuc()">■ Stop and get result</button>`;
+ const r=auc.res;
+ return h+`<div class="card"><div><strong>🏆 ${esc(nm(r.winner))}</strong><small>Takes ${rs(r.bid)}</small></div></div><div class="grid"><div class="stat s2"><b>${rs(r.d)}</b><span>Discount</span></div><div class="stat s4"><b>${rs(r.cm)}</b><span>Commission</span></div><div class="stat s3"><b>${rs(r.dv)}</b><span>Dividend each</span></div><div class="stat s1"><b>${rs(base(c)-r.dv)}</b><span>Others pay</span></div></div><button class="btn" onclick="auc=null;render()">Next auction</button>`;
+}
+function pickAuc(id){const c=getC(id);auc={cid:id,m:nextM(c),st:'idle',bids:[]};render()}
+function addBid(){const a=+$('#ba').value,c=getC(auc.cid);if(!a||a<=0||a>c.value)return alert('Bid must be between 1 and '+c.value);const m=$('#bm').value;auc.bids=auc.bids.filter(b=>b.m!=m);auc.bids.push({m,a});render()}
+function stopAuc(){
+ const c=getC(auc.cid);if(!auc.bids.length)return alert('Add at least one bid');
+ const w=auc.bids.reduce((x,y)=>y.a<x.a?y:x),d=c.value-w.a,cm=c.value*c.comm/100,dv=Math.max(0,(d-cm)/c.members.length);
+ c.rounds[auc.m]={winner:w.m,bid:w.a,dividend:dv};save();auc.res={winner:w.m,bid:w.a,d,cm,dv};auc.st='done';render();
+}
+function vSet(){return `<button class="btn g" onclick="backup()">⬇ Backup data</button><label style="display:block;margin-top:14px">Restore from backup</label><input type="file" accept=".json" onchange="restore(this.files[0])"><button class="btn r" onclick="if(confirm('Delete ALL data?')){db={members:[],chits:[],pay:{}};save();render()}">Reset all data</button><p class="muted" style="margin-top:14px">Data is stored only in this browser. Back up often.</p>`}
+function backup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db)],{type:'application/json'}));a.download='velan-chit-backup.json';a.click()}
+function restore(f){if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d.members||!d.chits)throw 0;db=d;save();render();alert('Restored')}catch(e){alert('Invalid backup file')}})}
+
+function chitEdit(id){const c=getC(id);modal(`<h3>Edit chit</h3><label>Name</label><input id="en" value="${esc(c.name)}"><label>Chit value (₹)</label><input id="ev" type="number" value="${c.value}"><label>Commission %</label><input id="ec" type="number" value="${c.comm}"><label>Start date</label><input id="ed" type="date" value="${c.start}"><button class="btn g" onclick="saveEdit('${id}')">Save changes</button>`)}
+function saveEdit(id){const c=getC(id),v=+$('#ev').value,n=$('#en').value.trim();if(!n||v<=0)return alert('Enter name and value');c.name=n;c.value=v;c.comm=+$('#ec').value||0;c.start=$('#ed').value||c.start;save();closeM()}
+function stmt(cid){
+ const c=getC(cid),k=calc().ch[cid];
+ let h=`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.name)} statement</title><style>body{font-family:sans-serif;padding:10px;font-size:12px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px;text-align:center}th{background:#ede9fe}.p{color:#087f5b}.u{color:#d9480f}button{padding:10px 16px;margin-top:12px}@media print{button{display:none}}</style></head><body><h2>${esc(c.name)} - Statement</h2><p>${rs(c.value)} | ${c.months} months | ${c.type=='fixed'?'Fixed':'Auction'} | Start ${c.start}</p><div style="overflow-x:auto"><table><tr><th>#</th><th>Winner</th><th>Dividend</th>${c.members.map(id=>`<th>${esc(nm(id))}</th>`).join('')}</tr>`;
+ for(let m=0;m<c.months;m++)h+=`<tr><td>${m+1}</td><td>${winnerOf(c,m)?esc(nm(winnerOf(c,m))):'-'}</td><td>${div(c,m)?rs(div(c,m)):'-'}</td>${c.members.map(id=>db.pay[key(c,m,id)]?`<td class="p">${rs(due(c,m,id))} ✓</td>`:`<td class="u">${rs(due(c,m,id))}</td>`).join('')}</tr>`;
+ h+=`</table></div><p><b>Collected:</b> ${rs(k.cc)} &nbsp; <b>Pending:</b> ${rs(k.pp)}</p><button onclick="print()">Print / Save as PDF</button></body></html>`;
+ const w=window.open('','_blank');if(!w)return alert('Allow popups to open the statement');w.document.write(h);w.document.close();
+}
+render();
+
+</script>
 </body></html>
