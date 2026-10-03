@@ -100,7 +100,7 @@ function calc(){
  return r}
 function vHome(){
  const k=calc();
- let h=`<div class="grid"><div class="stat s1"><b>${db.members.length}</b><span>Members</span></div><div class="stat s2"><b>${db.chits.length}</b><span>Chits</span></div><div class="stat s3"><b>${rs(k.col)}</b><span>Collected</span></div><div class="stat s4"><b>${rs(k.pen)}</b><span>Pending dues</span></div></div>`;
+ let h=`<button class="btn" style="margin:0 0 14px" onclick="monthlyReport()">📊 Monthly Report</button><div class="grid"><div class="stat s1"><b>${db.members.length}</b><span>Members</span></div><div class="stat s2"><b>${db.chits.length}</b><span>Chits</span></div><div class="stat s3"><b>${rs(k.col)}</b><span>Collected</span></div><div class="stat s4"><b>${rs(k.pen)}</b><span>Pending dues</span></div></div>`;
  if(!db.chits.length)return h+empty('No chits yet. Add members, then create a chit.');
  const n=new Date(),nk=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'),ks=Object.keys(k.mon).sort();
  let use=ks.filter(x=>x<=nk).slice(-6);if(!use.length)use=ks.slice(0,6);
@@ -128,24 +128,24 @@ function saveMem(id){const n=$('#mn').value.trim();if(!n)return alert('Enter a n
  if(id){const m=db.members.find(x=>x.id==id);m.name=n;m.phone=p}else db.members.push({id:uid(),name:n,phone:p});save();closeM()}
 function delMem(id){if(db.chits.some(c=>c.members.includes(id)))return alert('This member is in a chit. Remove the chit first.');if(confirm('Delete member?')){db.members=db.members.filter(m=>m.id!=id);save();render()}}
 function histM(id){
- const mb=db.members.find(x=>x.id==id),L=calc().mem[id]||[];let paid=0,dv=0;
+ const mb=db.members.find(x=>x.id==id),k=calc(),L=k.mem[id]||[]; if(!mb)return;
+ let paid=0,dv=0,pending=0,won=0;
  const rows=db.chits.filter(c=>c.members.includes(id)).map(c=>{let p=0,dd=0,w=[];
-  for(let m=0;m<c.months;m++){if(db.pay[key(c,m,id)])p+=due(c,m,id);if(winnerOf(c,m)==id)w.push(m+1);if(!wonBy(c,m,id))dd+=div(c,m)}
+  for(let m=0;m<c.months;m++){if(db.pay[key(c,m,id)])p+=due(c,m,id);else if(m<=curM(c))pending+=due(c,m,id);if(winnerOf(c,m)==id){w.push(m+1);won++}if(!wonBy(c,m,id))dd+=div(c,m)}
   paid+=p;dv+=dd;const pn=L.filter(x=>x.c.id==c.id).reduce((a,x)=>a+x.d,0);
-  return `<div class="card"><div><strong>${esc(c.name)}</strong><small>Paid ${rs(p)} • Pending ${rs(pn)}${dd?' • Dividend '+rs(dd):''}${w.length?' • Won month '+w.join(', '):''}</small></div></div>`}).join('')||empty('Not in any chit yet');
- const pen=L.reduce((a,x)=>a+x.d,0);
- modal(`<h3>${esc(mb.name)}</h3><div class="grid"><div class="stat s3"><b>${rs(paid)}</b><span>Paid</span></div><div class="stat s4"><b>${rs(pen)}</b><span>Pending</span></div><div class="stat s1"><b>${rs(dv)}</b><span>Dividend received</span></div></div>${rows}${pen?`<button class="btn wa" onclick="wa('${id}')">WhatsApp reminder</button>`:''}`);
+  return `<div class="card"><div><strong>${esc(c.name)}</strong><small>Paid ${rs(p)} • Pending ${rs(pn)}${dd?' • Dividend '+rs(dd):''}${w.length?' • Won month '+w.join(', '):''}</small></div><button class="pill v" style="border:0" onclick="memberChitStmt('${id}','${c.id}')">Statement</button></div>`}).join('')||empty('Not in any chit yet');
+ modal(`<h3>👤 ${esc(mb.name)}</h3><p class="muted">${esc(mb.phone||'No phone number')}</p><div class="grid"><div class="stat s3"><b>${rs(paid)}</b><span>Total paid</span></div><div class="stat s4"><b>${rs(pending)}</b><span>Pending</span></div><div class="stat s1"><b>${rs(dv)}</b><span>Dividend</span></div><div class="stat s2"><b>${won}</b><span>Wins</span></div></div><button class="btn" onclick="memberStmt('${id}')">🧾 Full Member Statement</button>${mb.phone?`<button class="btn wa" onclick="wa('${id}')">WhatsApp</button>`:''}<h3>Chit history</h3>${rows}`);
 }
 
 function vChit(){
  if(view)return vDetail(getC(view));
  if(!db.chits.length)return empty('No chits yet. Tap + to create one.');
- return db.chits.map(c=>`<div class="card" onclick="view='${c.id}';render()"><div class="mo" style="background:${c.type=='fixed'?'#6366f1':'#ec4899'}">${c.type=='fixed'?'F':'A'}</div><div><strong>${esc(c.name)}</strong><small>${rs(c.value)} • ${c.months} months • ${rs(base(c))}/month</small></div><button class="pill v" style="border:0" onclick="event.stopPropagation();chitEdit('${c.id}')">Edit</button><button class="pill" style="border:0" onclick="event.stopPropagation();delChit('${c.id}')">Delete</button></div>`).join('');
+ return db.chits.map(c=>`<div class="card" onclick="view='${c.id}';render()"><div class="mo" style="background:${c.type=='fixed'?'#6366f1':'#ec4899'}">${c.type=='fixed'?'F':c.type=='draw'?'D':'A'}</div><div><strong>${esc(c.name)}</strong><small>${rs(c.value)} • ${c.months} months • ${rs(base(c))}/month</small></div><button class="pill v" style="border:0" onclick="event.stopPropagation();chitEdit('${c.id}')">Edit</button><button class="pill" style="border:0" onclick="event.stopPropagation();delChit('${c.id}')">Delete</button></div>`).join('');
 }
 function delChit(id){if(confirm('Delete this chit and its payments?')){db.chits=db.chits.filter(c=>c.id!=id);save();render()}}
 function chitForm(){
  if(db.members.length<2)return alert('Add at least 2 members first');
- modal(`<h3>New chit</h3><label>Name</label><input id="cn"><label>Chit value (₹)</label><input id="cv" type="number"><label>Months (= number of members)</label><input id="cm" type="number"><label>Type</label><select id="ct"><option value="fixed">Fixed chit</option><option value="auction">Auction chit (dividend)</option></select><label>Commission %</label><input id="cc" type="number" value="5"><label>Start date</label><input id="cd" type="date" value="${new Date().toISOString().slice(0,10)}"><label>Members</label>${db.members.map(m=>`<label class="chk"><input type="checkbox" class="cmem" value="${m.id}"><span>${esc(m.name)}</span></label>`).join('')}<button class="btn g" onclick="saveChit()">Create chit</button>`);
+ modal(`<h3>New chit</h3><label>Name</label><input id="cn"><label>Chit value (₹)</label><input id="cv" type="number"><label>Months (= number of members)</label><input id="cm" type="number"><label>Type</label><select id="ct"><option value="fixed">Fixed chit</option><option value="auction">Auction chit (dividend)</option><option value="draw">Lucky Draw chit</option></select><label>Commission %</label><input id="cc" type="number" value="5"><label>Start date</label><input id="cd" type="date" value="${new Date().toISOString().slice(0,10)}"><label>Members</label>${db.members.map(m=>`<label class="chk"><input type="checkbox" class="cmem" value="${m.id}"><span>${esc(m.name)}</span></label>`).join('')}<button class="btn g" onclick="saveChit()">Create chit</button>`);
 }
 function saveChit(){
  const ids=[...document.querySelectorAll('.cmem:checked')].map(x=>x.value),v=+$('#cv').value,mo=+$('#cm').value,n=$('#cn').value.trim();
@@ -154,18 +154,23 @@ function saveChit(){
  db.chits.push({id:uid(),name:n,value:v,months:mo,type:$('#ct').value,comm:+$('#cc').value||0,start:$('#cd').value,members:ids,rounds:{}});save();closeM()
 }
 function vDetail(c){
- let h=`<button class="back" onclick="view=null;render()">‹ Back</button><div class="hero ${c.type}"><h2>${esc(c.name)}</h2><p>${rs(c.value)} • ${c.months} months • ${c.type=='fixed'?'Fixed':'Auction'}</p></div><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn" style="margin:0" onclick="chitEdit('${c.id}')">✏️ Edit</button><button class="btn g" style="margin:0" onclick="stmt('${c.id}')">🖨 Statement</button></div>`;
+ let h=`<button class="back" onclick="view=null;render()">‹ Back</button><div class="hero ${c.type}"><h2>${esc(c.name)}</h2><p>${rs(c.value)} • ${c.months} months • ${c.type=='fixed'?'Fixed':c.type=='draw'?'Lucky Draw':'Auction'}</p></div><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn" style="margin:0" onclick="chitEdit('${c.id}')">✏️ Edit</button><button class="btn g" style="margin:0" onclick="stmt('${c.id}')">🖨 Statement</button></div>`;
  for(let m=0;m<c.months;m++){const w=winnerOf(c,m),p=c.members.filter(id=>db.pay[key(c,m,id)]).length;
   h+=`<div class="row" onclick="openMonth('${c.id}',${m})"><div class="mo">${m+1}</div><div><strong>${w?esc(nm(w)):'Winner pending'}</strong><small>${rs(base(c))}${c.type=='auction'&&w?' • dividend '+rs(div(c,m)):''}</small></div><span class="pill ${p==c.members.length?'g':''}">${p}/${c.members.length} paid</span></div>`}
  return h;
 }
 function openMonth(cid,m){
- const c=getC(cid);let h=`<h3>Month ${m+1}</h3>`;
+ const c=getC(cid);let h=`<h3>${c.type=='draw'?'Lucky Draw':'Month'} ${m+1}</h3>`;
  if(c.type=='fixed')h+=`<label>Winner</label><select onchange="setW('${cid}',${m},this.value)"><option value="">Select winner</option>${c.members.map(id=>`<option value="${id}" ${winnerOf(c,m)==id?'selected':''}>${esc(nm(id))}</option>`).join('')}</select>`;
- else h+=`<p class="muted">Winner by auction: ${winnerOf(c,m)?esc(nm(winnerOf(c,m))):'not held yet'}</p>`+(winnerOf(c,m)?`<button class="btn r" style="margin:0 0 8px" onclick="if(confirm('Reset this auction result?')){delete getC('${cid}').rounds[${m}];save();auc=null;closeM()}">Reset this auction</button>`:'');
- h+=`<p class="muted">Tick when paid</p>`+c.members.map(id=>`<label class="chk"><input type="checkbox" ${db.pay[key(c,m,id)]?'checked':''} onchange="togglePay('${cid}',${m},'${id}',this.checked)"><span>${esc(nm(id))}</span><b>${rs(due(c,m,id))}</b></label>`).join('');
+ else if(c.type=='draw'){
+   const w=winnerOf(c,m), eligible=c.members.filter(id=>!wonBy(c,m,id));
+   h+=w?`<div class="hero fixed"><h2>🏆 ${esc(nm(w))}</h2><p>Lucky draw winner</p></div>`:`<p class="muted">Eligible members: ${eligible.length}</p><button class="btn g" onclick="luckyDraw('${cid}',${m})">🎲 Pick Lucky Winner</button>`;
+ } else h+=`<p class="muted">Winner by auction: ${winnerOf(c,m)?esc(nm(winnerOf(c,m))):'not held yet'}</p>`+(winnerOf(c,m)?`<button class="btn r" style="margin:0 0 8px" onclick="if(confirm('Reset this auction result?')){delete getC('${cid}').rounds[${m}];save();auc=null;closeM()}">Reset this auction</button>`:'');
+ h+=`<p class="muted">Tick when paid</p>`+c.members.map(id=>`<label class="chk"><input type="checkbox" ${db.pay[key(c,m,id)]?'checked':''} onchange="togglePay('${cid}',${m},'${id}',this.checked)"><span>${esc(nm(id))}</span><b>${rs(due(c,m,id))}</b>${db.pay[key(c,m,id)]?`<button class="pill g" style="border:0" onclick="event.preventDefault();receipt('${cid}',${m},'${id}')">🧾</button>`:''}</label>`).join('');
  modal(h);
 }
+function luckyDraw(cid,m){const c=getC(cid),eligible=c.members.filter(id=>!wonBy(c,m,id));if(!eligible.length)return alert('No eligible members left');const winner=eligible[Math.floor(Math.random()*eligible.length)];c.rounds[m]={winner,dividend:0,mode:'draw'};save();closeM();alert('🏆 Lucky winner: '+nm(winner));}
+
 function setW(cid,m,v){const c=getC(cid);if(v)c.rounds[m]={winner:v,dividend:0};else delete c.rounds[m];save()}
 function togglePay(cid,m,id,on){const k=key(getC(cid),m,id);on?db.pay[k]=1:delete db.pay[k];save()}
 
@@ -175,19 +180,23 @@ function vAuc(){
  if(!auc||!getC(auc.cid)){const c=cs[0];auc={cid:c.id,m:nextM(c),st:'idle',bids:[]}}
  const c=getC(auc.cid);
  let h=`<label>Chit</label><select onchange="pickAuc(this.value)">${cs.map(x=>`<option value="${x.id}" ${x.id==c.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
- if(auc.m<0)return h+empty('All months of this chit are done 🎉');
- h+=`<div class="hero auction"><h2>Month ${auc.m+1} auction</h2><p>Chit value ${rs(c.value)} • commission ${c.comm}%</p></div>`;
- if(auc.st=='idle')return h+`<button class="btn g" onclick="auc.st='live';render()">▶ Start auction</button>`;
- if(auc.st=='live')return h+`<span class="pill">LIVE</span><label>Member</label><select id="bm">${c.members.filter(id=>!wonBy(c,auc.m,id)).map(id=>`<option value="${id}">${esc(nm(id))}</option>`).join('')}</select><label>Bid: amount member will take (₹)</label><input id="ba" type="number"><button class="btn" onclick="addBid()">Add bid</button>${auc.bids.map(b=>`<div class="row"><div><strong>${esc(nm(b.m))}</strong></div><b>${rs(b.a)}</b></div>`).join('')}<button class="btn r" onclick="stopAuc()">■ Stop and get result</button>`;
- const r=auc.res;
- return h+`<div class="card"><div><strong>🏆 ${esc(nm(r.winner))}</strong><small>Takes ${rs(r.bid)}</small></div></div><div class="grid"><div class="stat s2"><b>${rs(r.d)}</b><span>Discount</span></div><div class="stat s4"><b>${rs(r.cm)}</b><span>Commission</span></div><div class="stat s3"><b>${rs(r.dv)}</b><span>Dividend each</span></div><div class="stat s1"><b>${rs(base(c)-r.dv)}</b><span>Others pay</span></div></div><button class="btn" onclick="auc=null;render()">Next auction</button>`;
+ if(auc.m<0)h+=empty('All months of this chit are done 🎉');
+ else {
+  h+=`<div class="hero auction"><h2>Month ${auc.m+1} auction</h2><p>Chit value ${rs(c.value)} • commission ${c.comm}%</p></div>`;
+  if(auc.st=='idle')h+=`<button class="btn g" onclick="auc.st='live';render()">▶ Start auction</button>`;
+  else if(auc.st=='live')h+=`<span class="pill">LIVE</span><label>Member</label><select id="bm">${c.members.filter(id=>!wonBy(c,auc.m,id)).map(id=>`<option value="${id}">${esc(nm(id))}</option>`).join('')}</select><label>Bid: amount member will take (₹)</label><input id="ba" type="number"><button class="btn" onclick="addBid()">Add bid</button>${auc.bids.map(b=>`<div class="row"><div><strong>${esc(nm(b.m))}</strong></div><b>${rs(b.a)}</b></div>`).join('')}<button class="btn r" onclick="stopAuc()">■ Stop and get result</button>`;
+  else {const r=auc.res;h+=`<div class="card"><div><strong>🏆 ${esc(nm(r.winner))}</strong><small>Takes ${rs(r.bid)}</small></div></div><div class="grid"><div class="stat s2"><b>${rs(r.d)}</b><span>Discount</span></div><div class="stat s4"><b>${rs(r.cm)}</b><span>Commission</span></div><div class="stat s3"><b>${rs(r.dv)}</b><span>Dividend each</span></div><div class="stat s1"><b>${rs(base(c)-r.dv)}</b><span>Others pay</span></div></div><button class="btn" onclick="auc=null;render()">Next auction</button>`}
+ }
+ h+=`<h3>📜 Auction History</h3>`;
+ const hist=Object.keys(c.rounds||{}).map(Number).sort((a,b)=>a-b).filter(m=>c.rounds[m].winner).map(m=>{const r=c.rounds[m];return `<div class="card"><div><strong>Month ${m+1} • 🏆 ${esc(nm(r.winner))}</strong><small>Bid ${rs(r.bid||c.value)} • Discount ${rs(c.value-(r.bid||c.value))} • Dividend ${rs(r.dividend||0)}</small>${r.bids?`<small>Bids: ${r.bids.map(b=>esc(nm(b.m))+' '+rs(b.a)).join(' • ')}</small>`:''}</div><button class="pill v" style="border:0" onclick="auctionReceipt('${c.id}',${m})">🧾</button></div>`}).join('');
+ return h+(hist||empty('No auction history yet.'));
 }
 function pickAuc(id){const c=getC(id);auc={cid:id,m:nextM(c),st:'idle',bids:[]};render()}
 function addBid(){const a=+$('#ba').value,c=getC(auc.cid);if(!a||a<=0||a>c.value)return alert('Bid must be between 1 and '+c.value);const m=$('#bm').value;auc.bids=auc.bids.filter(b=>b.m!=m);auc.bids.push({m,a});render()}
 function stopAuc(){
  const c=getC(auc.cid);if(!auc.bids.length)return alert('Add at least one bid');
  const w=auc.bids.reduce((x,y)=>y.a<x.a?y:x),d=c.value-w.a,cm=c.value*c.comm/100,dv=Math.max(0,(d-cm)/c.members.length);
- c.rounds[auc.m]={winner:w.m,bid:w.a,dividend:dv};save();auc.res={winner:w.m,bid:w.a,d,cm,dv};auc.st='done';render();
+ c.rounds[auc.m]={winner:w.m,bid:w.a,dividend:dv,bids:auc.bids.map(b=>({m:b.m,a:b.a}))};save();auc.res={winner:w.m,bid:w.a,d,cm,dv};auc.st='done';render();
 }
 function vSet(){return `<button class="btn g" onclick="backup()">⬇ Backup data</button><label style="display:block;margin-top:14px">Restore from backup</label><input type="file" accept=".json" onchange="restore(this.files[0])"><button class="btn r" onclick="if(confirm('Delete ALL data?')){db={members:[],chits:[],pay:{}};save();render()}">Reset all data</button><p class="muted" style="margin-top:14px">Data is stored only in this browser. Back up often.</p>`}
 function backup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db)],{type:'application/json'}));a.download='velan-chit-backup.json';a.click()}
@@ -195,9 +204,26 @@ function restore(f){if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(
 
 function chitEdit(id){const c=getC(id);modal(`<h3>Edit chit</h3><label>Name</label><input id="en" value="${esc(c.name)}"><label>Chit value (₹)</label><input id="ev" type="number" value="${c.value}"><label>Commission %</label><input id="ec" type="number" value="${c.comm}"><label>Start date</label><input id="ed" type="date" value="${c.start}"><button class="btn g" onclick="saveEdit('${id}')">Save changes</button>`)}
 function saveEdit(id){const c=getC(id),v=+$('#ev').value,n=$('#en').value.trim();if(!n||v<=0)return alert('Enter name and value');c.name=n;c.value=v;c.comm=+$('#ec').value||0;c.start=$('#ed').value||c.start;save();closeM()}
+function receipt(cid,m,id){
+ const c=getC(cid),member=db.members.find(x=>x.id==id),amount=due(c,m,id),date=new Date().toLocaleString('en-IN');
+ printDoc(`<h2>VELAN CHIT FUND</h2><h3>Payment Receipt</h3><p><b>Receipt No:</b> VCF-${Date.now().toString().slice(-8)}</p><table><tr><th>Member</th><td>${esc(member.name)}</td></tr><tr><th>Chit</th><td>${esc(c.name)}</td></tr><tr><th>Month</th><td>${m+1}</td></tr><tr><th>Amount</th><td><b>${rs(amount)}</b></td></tr><tr><th>Date</th><td>${date}</td></tr></table><p style="margin-top:30px">Payment received successfully.</p>`,'Payment Receipt');
+}
+function auctionReceipt(cid,m){const c=getC(cid),r=c.rounds[m];if(!r)return;printDoc(`<h2>VELAN CHIT FUND</h2><h3>Auction Result</h3><table><tr><th>Chit</th><td>${esc(c.name)}</td></tr><tr><th>Month</th><td>${m+1}</td></tr><tr><th>Winner</th><td>${esc(nm(r.winner))}</td></tr><tr><th>Bid / Taken</th><td>${rs(r.bid||c.value)}</td></tr><tr><th>Discount</th><td>${rs(c.value-(r.bid||c.value))}</td></tr><tr><th>Dividend each</th><td>${rs(r.dividend||0)}</td></tr></table>`,'Auction Result');}
+function printDoc(body,title){const w=window.open('','_blank');if(!w)return alert('Allow popups to print');w.document.write(`<html><head><title>${esc(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;max-width:700px;margin:auto}table{border-collapse:collapse;width:100%;margin-top:18px}td,th{border:1px solid #ccc;padding:10px;text-align:left}th{width:35%;background:#f3f0ff}@media print{button{display:none}}</style></head><body>${body}<button onclick="print()" style="margin-top:20px;padding:10px 18px">Print / Save PDF</button></body></html>`);w.document.close();}
+function memberStmt(id){
+ const mb=db.members.find(x=>x.id==id),rows=[];let total=0,pending=0,dividend=0;
+ db.chits.filter(c=>c.members.includes(id)).forEach(c=>{for(let m=0;m<c.months;m++){const d=due(c,m,id),paid=!!db.pay[key(c,m,id)],dv=!wonBy(c,m,id)?div(c,m):0;if(paid)total+=d;else if(m<=curM(c))pending+=d;dividend+=dv;rows.push({c,m,d,paid,dv,winner:winnerOf(c,m)==id})}});
+ printDoc(`<h2>VELAN CHIT FUND</h2><h3>Member Statement</h3><p><b>Member:</b> ${esc(mb.name)}<br><b>Phone:</b> ${esc(mb.phone||'-')}</p><table><tr><th>Chit</th><th>Month</th><th>Due</th><th>Status</th><th>Dividend</th><th>Winner</th></tr>${rows.map(r=>`<tr><td>${esc(r.c.name)}</td><td>${r.m+1}</td><td>${rs(r.d)}</td><td>${r.paid?'Paid':'Pending'}</td><td>${rs(r.dv)}</td><td>${r.winner?'🏆 Yes':'-'}</td></tr>`).join('')}</table><p><b>Total paid:</b> ${rs(total)} &nbsp; <b>Pending:</b> ${rs(pending)} &nbsp; <b>Dividend:</b> ${rs(dividend)}</p>`,'Member Statement');
+}
+function memberChitStmt(id,cid){memberStmt(id);}
+function monthlyReport(){
+ const k=calc(),keys=Object.keys(k.mon).filter(x=>k.mon[x].col||k.mon[x].pen).sort().reverse();
+ printDoc(`<h2>VELAN CHIT FUND</h2><h3>Monthly Report</h3><p>Generated: ${new Date().toLocaleString('en-IN')}</p><table><tr><th>Month</th><th>Collected</th><th>Pending</th><th>Total Due</th></tr>${keys.map(x=>`<tr><td>${x}</td><td>${rs(k.mon[x].col)}</td><td>${rs(k.mon[x].pen)}</td><td>${rs(k.mon[x].col+k.mon[x].pen)}</td></tr>`).join('')}</table><h3>Chit-wise Summary</h3><table><tr><th>Chit</th><th>Collected</th><th>Pending</th></tr>${db.chits.map(c=>`<tr><td>${esc(c.name)}</td><td>${rs(k.ch[c.id]?.cc||0)}</td><td>${rs(k.ch[c.id]?.pp||0)}</td></tr>`).join('')}</table>`,'Monthly Report');
+}
+
 function stmt(cid){
  const c=getC(cid),k=calc().ch[cid];
- let h=`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.name)} statement</title><style>body{font-family:sans-serif;padding:10px;font-size:12px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px;text-align:center}th{background:#ede9fe}.p{color:#087f5b}.u{color:#d9480f}button{padding:10px 16px;margin-top:12px}@media print{button{display:none}}</style></head><body><h2>${esc(c.name)} - Statement</h2><p>${rs(c.value)} | ${c.months} months | ${c.type=='fixed'?'Fixed':'Auction'} | Start ${c.start}</p><div style="overflow-x:auto"><table><tr><th>#</th><th>Winner</th><th>Dividend</th>${c.members.map(id=>`<th>${esc(nm(id))}</th>`).join('')}</tr>`;
+ let h=`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.name)} statement</title><style>body{font-family:sans-serif;padding:10px;font-size:12px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px;text-align:center}th{background:#ede9fe}.p{color:#087f5b}.u{color:#d9480f}button{padding:10px 16px;margin-top:12px}@media print{button{display:none}}</style></head><body><h2>${esc(c.name)} - Statement</h2><p>${rs(c.value)} | ${c.months} months | ${c.type=='fixed'?'Fixed':c.type=='draw'?'Lucky Draw':'Auction'} | Start ${c.start}</p><div style="overflow-x:auto"><table><tr><th>#</th><th>Winner</th><th>Dividend</th>${c.members.map(id=>`<th>${esc(nm(id))}</th>`).join('')}</tr>`;
  for(let m=0;m<c.months;m++)h+=`<tr><td>${m+1}</td><td>${winnerOf(c,m)?esc(nm(winnerOf(c,m))):'-'}</td><td>${div(c,m)?rs(div(c,m)):'-'}</td>${c.members.map(id=>db.pay[key(c,m,id)]?`<td class="p">${rs(due(c,m,id))} ✓</td>`:`<td class="u">${rs(due(c,m,id))}</td>`).join('')}</tr>`;
  h+=`</table></div><p><b>Collected:</b> ${rs(k.cc)} &nbsp; <b>Pending:</b> ${rs(k.pp)}</p><button onclick="print()">Print / Save as PDF</button></body></html>`;
  const w=window.open('','_blank');if(!w)return alert('Allow popups to open the statement');w.document.write(h);w.document.close();
