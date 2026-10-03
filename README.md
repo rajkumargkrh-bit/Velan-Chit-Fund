@@ -1,11 +1,19 @@
 # Velan Chit Fund
-Mobile chit fund manager (HTML/CSS/JS, Local Storage). Deploy: push to GitHub, then Settings > Pages > main branch.
 
+Mobile-first local Chit Fund Management app.
 
-## New features
-- Member profile with payment, pending, dividend and win summary
-- Lucky Draw chit mode with automatic eligible-member selection
-- Auction history with saved bids and printable result
-- Payment receipts
-- Full member statements
-- Monthly collection/pending reports
+## Added features
+- Member profiles and statements
+- Lucky Draw mode
+- Auction history and bid history
+- Payment and auction receipts
+- Monthly reports
+- Chit calculator
+- Monthly chit calendar
+- Pending / overdue alerts
+- Member winner history
+- Auto receipt numbering (VCF-YYYY-0001)
+- Undo / redo-last-action style local state recovery
+- Backup / restore
+
+Data is stored locally in the browser. Use Settings > Backup regularly.
